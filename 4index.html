@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Cal2Fit AI Dashboard</title>
+
+<!-- Chart.js + jsPDF + QRCode -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+
+<style>
+  :root{--bg1:#081226;--bg2:#0e293b;--accent:#FFD700;--muted:#9aa6b2;}
+  body{margin:0;font-family:Arial, sans-serif;background:linear-gradient(180deg,var(--bg1),var(--bg2));color:#e6eef6;}
+  header{padding:16px;display:flex;align-items:center;gap:12px;background:#0a1a2b;}
+  .logo img{width:50px;height:50px;border-radius:12px;}
+  h1{font-size:20px;margin:0}
+  .container{display:grid;grid-template-columns:1fr 380px;gap:18px;padding:16px;}
+  .card{background:rgba(255,255,255,0.03);border-radius:14px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,0.6);}
+  input[type="text"]{padding:10px;border-radius:8px;border:none;width:70%;background:rgba(255,255,255,0.05);color:#fff;}
+  button{padding:10px 16px;border:none;border-radius:8px;font-weight:700;cursor:pointer;}
+  .primary{background:var(--accent);color:#000;}
+  .ghost{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.1);}
+  .rings{display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap;}
+  .ring{width:110px;height:110px;position:relative;}
+  .ring svg{transform:rotate(-90deg);}
+  .ring .label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .vit-list{margin-top:10px;display:flex;flex-direction:column;gap:6px;}
+  .vit-row{display:flex;gap:8px;align-items:center;}
+  .vit-bar{flex:1;height:8px;background:rgba(255,255,255,0.05);border-radius:6px;overflow:hidden;}
+  .vit-fill{height:100%;background:linear-gradient(90deg,#31b76b,#FFD700);width:0%;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{padding:6px;border-bottom:1px dashed rgba(255,255,255,0.1);color:#ccc;}
+  .del-btn{background:transparent;border:none;color:#ff7b7b;cursor:pointer;}
+  #previewImg{max-width:160px;border-radius:10px;margin-top:8px;display:none;}
+  .share-row{display:flex;gap:10px; margin-top:10px;}
+  @media(max-width:900px){.container{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <img id="headerLogo" 
+    src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAABg0lEQVRoge3ZQU7CMBBA0fP4z7nKgwB6zItSazJr0xmc4KikRlKnPv1wOAAAAAAD8l6fVffr77+OpV1V2+WwhVv5uGkUQhBBCCCGEEEIIIYQQQgjhK1R5B7fn0WmX6L9MCceBkmFJWzle6GYN2H1bAWPBP8P1kaFTqFv0JQ2kQmgKIo6k5Vp4EtHxgAgvX54Z0zZWciYJh5ZV7tKln04aJG2uV6+4eED5qWfHguwXIXN7QmH9lYh9OlVpyfemPzzXhEwscsIfPTmclZoSQqxshna8VtIpo7syBysfAOHYHJ1YvGztXlzSc8/7bOj7mKvgR2uT0DTz+QBW3FZk6Lpe88AAAAASUVORK5CYII=" 
+    alt="Cal2Fit AI Logo"/>
+  </div>
+  <h1>Cal2Fit AI Dashboard</h1>
+</header>
+
+<main class="container">
+  <!-- LEFT -->
+  <section>
+    <div class="card">
+      <h3>🔍 Identify Food</h3>
+      <input id="foodInput" type="text" placeholder="Type food name"/>
+      <button class="primary" onclick="onSearchClick()">Search</button>
+
+      <!-- Upload from gallery -->
+      <label for="foodImage" style="margin-left:10px;cursor:pointer;" class="ghost">🖼️ Upload</label>
+      <input id="foodImage" type="file" accept="image/*" style="display:none"/>
+
+      <!-- Capture from camera -->
+      <label for="cameraInput" style="margin-left:10px;cursor:pointer;" class="ghost">📸 Camera</label>
+      <input id="cameraInput" type="file" accept="image/*" capture="environment" style="display:none"/>
+
+      <img id="previewImg"/>
+    </div>
+
+    <div class="card"><h3>📊 Nutrition Rings</h3><div class="rings" id="ringsRow"></div></div>
+    <div class="card"><h3>💊 Vitamins & Minerals</h3><div class="vit-list" id="vitList"></div></div>
+    <div class="card"><h3>🏃 Burn It Off</h3><div id="burnText">-</div></div>
+    <div class="card"><h3>👩‍⚕️ Patient Tips</h3><div id="patientTips">-</div></div>
+    <div class="card"><h3>💡 Daily Doctor Tip</h3><div id="doctorTip">-</div></div>
+
+    <div class="card">
+      <h3>📅 Weekly History</h3>
+      <div class="share-row">
+        <button class="primary" onclick="saveCurrent()">Save</button>
+        <button class="ghost" onclick="eraseAll()">Erase All</button>
+        <button class="ghost" onclick="downloadHistory()">Download CSV</button>
+      </div>
+      <table>
+        <thead><tr><th>Date</th><th>Food</th><th>Calories</th><th></th></tr></thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+      <div id="weeklyRings" style="margin-top:20px; display:flex; gap:20px; flex-wrap:wrap; justify-content:center;"></div>
+      <div style="margin-top:15px; text-align:center;">
+        <button onclick="exportAndSave()" style="padding:10px 16px; border:none; border-radius:8px; background:#FFD700; color:#000; font-weight:bold;">
+          📊 Export All Charts as PDF
+        </button>
+        <button onclick="shareReport()" style="padding:10px 16px; border:none; border-radius:8px; background:#31b76b; color:#fff; font-weight:bold; margin-left:8px;">
+          📤 Share Report
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT -->
+  <aside><div class="card"><h3>📌 Summary</h3><div id="summaryText">-</div></div></aside>
+</main>
+
+<script>
+// ================= CONFIG =================
+const HF_API_KEY = "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"; // HuggingFace
+const HF_MODEL   = "nateraw/food";
+const USDA_KEY   = "TwdcrPYxcuMS7cE5QdZEFs42gH7ZwAcRC8Z181NG"; // USDA
+const USER_NAME  = "Murali";
+const STORAGE_KEY = "cal2fit_history";
+const logoBase64 = document.getElementById('headerLogo').src;
+
+// ============ Nutrition Lookup (USDA) ============
+async function lookupNutrition(food){
+  try{
+    const url=`https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(food)}&pageSize=1&api_key=${USDA_KEY}`;
+    const resp=await fetch(url); const data=await resp.json();
+    if(!data.foods||!data.foods.length) return null;
+    const nutrients=data.foods[0].foodNutrients;
+    let nut={Calories:0,Protein:0,Carbs:0,Fat:0,vitamins:{}};
+    for(const n of nutrients){
+      if(/Energy/i.test(n.nutrientName)) nut.Calories=n.value;
+      else if(/Protein/i.test(n.nutrientName)) nut.Protein=n.value;
+      else if(/Carbohydrate/i.test(n.nutrientName)) nut.Carbs=n.value;
+      else if(/^Total lipid/i.test(n.nutrientName)) nut.Fat=n.value;
+      else nut.vitamins[n.nutrientName]=n.value+" "+n.unitName;
+    }
+    return nut;
+  }catch(e){console.error(e); return null;}
+}
+
+// ============ Show Nutrition ============
+function showNutrition(food,nut,imgSrc){
+  document.getElementById("summaryText").innerHTML=`<b>${food}</b>: ${nut.Calories} kcal, ${nut.Protein} g protein, ${nut.Carbs} g carbs, ${nut.Fat} g fat`;
+  renderRings(nut);
+  renderVitamins(nut.vitamins);
+  renderBurn(nut.Calories);
+  renderPatientTips(food);
+  renderDoctorTip();
+  if(imgSrc){const img=document.getElementById('previewImg'); img.src=imgSrc; img.style.display='block';}
+}
+
+// ============ Render Charts ============
+function renderRings(nut){
+  const rings=document.getElementById("ringsRow"); rings.innerHTML="";
+  const items=[["🔥Calories",nut.Calories,"kcal",2000],["🍗Protein",nut.Protein,"g",60],["🥔Carbs",nut.Carbs,"g",300],["🧈Fat",nut.Fat,"g",70]];
+  for(const [label,val,unit,max] of items){
+    const percent=Math.min(100,(val/max*100));
+    rings.innerHTML+=`
+      <div class="ring">
+        <svg width="110" height="110"><circle cx="55" cy="55" r="50" stroke="#444" stroke-width="10" fill="none"/>
+        <circle cx="55" cy="55" r="50" stroke="${label.includes('Calories')?'#ff4500':label.includes('Protein')?'#31b76b':label.includes('Carbs')?'#1e90ff':'#FFD700'}" stroke-width="10" fill="none" stroke-dasharray="${percent*3.14},314"/></svg>
+        <div class="label"><b>${val.toFixed(1)}</b><small>${unit}</small><small>${label}</small></div>
+      </div>`;
+  }
+}
+
+function renderVitamins(vits){
+  const list=document.getElementById("vitList"); list.innerHTML="";
+  for(const [k,v] of Object.entries(vits)){
+    list.innerHTML+=`<div class="vit-row"><span>${k}</span><div class="vit-bar"><div class="vit-fill" style="width:${Math.random()*100}%"></div></div><span>${v}</span></div>`;
+  }
+}
+
+// ============ Burn It Off with Icons ============
+function renderBurn(cal){
+  const walk = (cal/4).toFixed(0);
+  const run  = (cal/10).toFixed(0);
+  const swim = (cal/8).toFixed(0);
+
+  document.getElementById("burnText").innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <img src="https://img.icons8.com/ios-filled/30/ffffff/walking.png"/>
+        <span>Walk ~${walk} min</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <img src="https://img.icons8.com/ios-filled/30/ffffff/running.png"/>
+        <span>Run ~${run} min</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <img src="https://img.icons8.com/ios-filled/30/ffffff/swimming.png"/>
+        <span>Swim ~${swim} min</span>
+      </div>
+    </div>
+  `;
+}
+
+// Simple demo tips
+function renderPatientTips(food){document.getElementById("patientTips").innerText=food.includes("chicken")?"Good for diabetics (lean protein)":"General: Eat in moderation";}
+function renderDoctorTip(){document.getElementById("doctorTip").innerText="Drink plenty of water and exercise daily!";}
+
+// ============ Search ============
+async function onSearchClick(){
+  const food=document.getElementById("foodInput").value.trim();
+  if(!food) return;
+  const nut=await lookupNutrition(food);
+  if(nut) showNutrition(food,nut);
+  else alert("Food not found");
+}
+
+// ============ Camera / Upload ============
+async function handleImage(file){
+  const reader=new FileReader();
+  reader.onload=e=>{const img=document.getElementById('previewImg'); img.src=e.target.result; img.style.display='block';};
+  reader.readAsDataURL(file);
+  try{
+    const fd=new FormData(); fd.append('file',file);
+    const resp=await fetch(`https://api-inference.huggingface.co/models/${HF_MODEL}`,{method:'POST',headers:{Authorization:`Bearer ${HF_API_KEY}`},body:fd});
+    const j=await resp.json();
+    let detected=null;
+    if(Array.isArray(j)&&j[0]&&j[0].label) detected=j[0].label;
+    if(!detected&&j.error) console.warn("HF error",j.error);
+    if(!detected) detected=prompt("Could not detect food, enter name manually:");
+    if(!detected) return;
+    detected=detected.split(/[,:]/)[0].trim().toLowerCase();
+    document.getElementById("foodInput").value=detected;
+    const nut=await lookupNutrition(detected);
+    if(nut) showNutrition(detected,nut,document.getElementById('previewImg').src);
+  }catch(err){console.error(err); alert("Recognition failed");}
+}
+document.getElementById("cameraInput").addEventListener("change",ev=>{if(ev.target.files[0]) handleImage(ev.target.files[0]);});
+document.getElementById("foodImage").addEventListener("change",ev=>{if(ev.target.files[0]) handleImage(ev.target.files[0]);});
+
+// ============ History (Save / CSV / PDF / Share) ============
+function saveCurrent(){
+  const food=document.getElementById("foodInput").value;
+  const summary=document.getElementById("summaryText").innerText;
+  if(!food||!summary) return;
+  const cal=parseFloat(summary.split(" ")[2]);
+  const rec={date:new Date().toLocaleDateString(),food,cal};
+  const hist=JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]"); hist.push(rec);
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(hist));
+  renderHistory();
+}
+function renderHistory(){
+  const hist=JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");
+  const body=document.getElementById("historyBody"); body.innerHTML="";
+  hist.forEach((r,i)=>{body.innerHTML+=`<tr><td>${r.date}</td><td>${r.food}</td><td>${r.cal}</td><td><button class="del-btn" onclick="delHist(${i})">✖</button></td></tr>`;});
+}
+function delHist(i){const hist=JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]"); hist.splice(i,1); localStorage.setItem(STORAGE_KEY,JSON.stringify(hist)); renderHistory();}
+function eraseAll(){localStorage.removeItem(STORAGE_KEY); renderHistory();}
+function downloadHistory(){
+  const hist=JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]"); if(!hist.length) return;
+  let csv="Date,Food,Calories\n"; hist.forEach(r=>{csv+=`${r.date},${r.food},${r.cal}\n`;});
+  const blob=new Blob([csv],{type:"text/csv"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="history.csv"; a.click();
+}
+async function exportAndSave(){
+  const {jsPDF}=window.jspdf; const doc=new jsPDF();
+  doc.text("Cal2Fit AI Weekly Report",20,20);
+  doc.addImage(logoBase64,"PNG",150,10,40,40);
+  doc.text("User: "+USER_NAME,20,40);
+  doc.text("Date: "+new Date().toLocaleDateString(),20,
